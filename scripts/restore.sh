@@ -1,25 +1,30 @@
 #!/bin/bash
 set -e
 
-BACKUP_DIR="$(dirname "$0")/../backups"
-LATEST_BACKUP=$(ls -t "$BACKUP_DIR"/*.dump 2>/dev/null | head -n 1)
-
-if [ -z "$LATEST_BACKUP" ]; then
-  echo "❌ Error: No valid backup snapshot file (.dump) found inside local backups folder."
-  exit 1
+# Check if a backup file argument was passed
+if [ -z "$1" ]; then
+    echo "Usage: $0 <path_to_backup_file.sql>"
+    echo "Example: $0 ./backups/backup_20260707.sql"
+    exit 1
 fi
 
-echo "🔄 Tearing down existing infrastructure and data..."
-docker compose down -v
-docker compose up -d postgres
+BACKUP_FILE=$1
 
-echo "⏳ Waiting for database container to initialize..."
-sleep 10
+# Quick validation check
+if [ ! -f "$BACKUP_FILE" ]; then
+    echo "Error: Backup file '$BACKUP_FILE' not found."
+    exit 1
+fi
 
-echo "📦 Transferring backup artifact..."
-# Push it back to the temporary folder inside the new container instance
-MSYS_NO_PATHCONV=1 docker cp "$LATEST_BACKUP" local_postgres_test:/tmp/restore.dump
+echo "Terminating existing connections to hotel_db..."
+docker exec -i local_postgres_test psql -U postgres -d postgres -c \
+    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'hotel_db' AND pid <> pg_backend_pid();"
 
-echo "⚡ Restoring database from snapshot..."
-MSYS_NO_PATHCONV=1 docker exec -i local_postgres_test pg_restore -U postgres -d hotel_db --clean --no-owner /tmp/restore.dump
-echo "✅ Recovery operation successfully completed!"
+echo "Recreating a clean hotel_db database..."
+docker exec -i local_postgres_test psql -U postgres -d postgres -c "DROP DATABASE IF EXISTS hotel_db;"
+docker exec -i local_postgres_test psql -U postgres -d postgres -c "CREATE DATABASE hotel_db;"
+
+echo "Restoring database from: $BACKUP_FILE ..."
+docker exec -i local_postgres_test psql -U postgres -d hotel_db < "$BACKUP_FILE"
+
+echo "Database restore completed successfully."
