@@ -1,45 +1,40 @@
-# Multi-Environment Infrastructure & Optimized Database Stack
+# devops-assessment
 
-This repository contains a production-oriented DevOps architecture featuring modular multi-environment cloud infrastructure layouts and an optimized local database testing matrix.
+Internal DevOps framework assessment covering Terraform infrastructure modules, PostgreSQL index profiling, and backup scripts.
 
-## 🛠️ Project Structure
-- `infra/modules/`: Reusable architecture blueprints for Network, ECS, and RDS configurations.
-- `infra/envs/`: Environment configurations isolating development and production tiers.
-- `db/`: Data migrations and database engine initialization layer.
-- `scripts/`: System reliability backup and disaster recovery automations.
-- `.github/workflows/`: Continuous Integration pipeline automating checks via GitHub Actions.
+## Project Structure
+* `infra/` - Terraform configuration files (VPC, ECS, RDS)
+* `db/` - DB initialization and test data migrations
+* `scripts/` - Shell automations for backup/restore processes
 
-## 🚀 Local Database Verification Flow
+## Getting Started
 
-### 1. Initialize and Seed Stack
-Spin up the containerized database environment:
+### 1. Spin up the DB locally
 ```bash
 docker compose up -d
 ```
 
-### 2. Verify Query Optimization Performance
-To check index lookup efficiency, enter the active container environment:
+### 2. Verify Database Performance
+Connect to the database instance to run performance profiling checks:
 ```bash
-winpty docker exec -it local_postgres_test psql -U postgres -d hotel_db
+# Windows users might need 'winpty' prefix
+docker exec -it local_postgres_test psql -U postgres -d hotel_db
 ```
-Execute the assessment analytical query string:
+
+Run the analytics query to check index usage:
 ```sql
-EXPLAIN ANALYZE SELECT org_id, status, COUNT(*), SUM(amount) 
+EXPLAIN ANALYZE 
+SELECT org_id, status, COUNT(*), SUM(amount) 
 FROM hotel_bookings 
 WHERE city = 'delhi' 
-AND created_at >= NOW() - INTERVAL '30 days' 
+  AND created_at >= NOW() - INTERVAL '30 days' 
 GROUP BY org_id, status;
 ```
-*Performance Metric Verification:* The query planner utilizes an **`Index Only Scan`** via the `idx_hotel_bookings_query_perf` composite index structure, satisfying constraints without reading rows from raw disk space.
+*Note: The planner uses an Index Only Scan via `idx_hotel_bookings_query_perf` to skip direct disk reads.*
 
-### 3. Disaster Recovery Validation
-Run the lifecycle automation scripts to verify data backup and restore capabilities:
+### 3. Test Backups
 ```bash
+chmod +x scripts/*.sh
 ./scripts/backup.sh
 ./scripts/restore.sh
 ```
-
-## 📈 Index Performance Strategy Explanation
-The target analytical count query searches explicitly by filtering elements by `city` and a dynamic timestamp range `created_at`. Creating separate standalone indexes creates an inefficient query plan where the engine must perform two individual bitmap operations and merge them.
-
-Our design choice uses a **Composite Multi-Column Index** `(city, created_at)`. By appending an `INCLUDE (org_id, status, amount)` clause, we convert the entire database matching strategy into a highly optimized **Index Only Scan**. The engine extracts calculations directly from the index nodes without needing to perform slow data block pointer lookups on disk.
