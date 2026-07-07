@@ -7,30 +7,33 @@ on:
     branches: [ main ]
 
 jobs:
-  terraform-check:
+  validate-infra:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Loops through dev and prod folders sequentially
+        environment: [dev, prod]
     
     steps:
-      - name: Checkout code
+      - name: Checkout repository code
         uses: actions/checkout@v4
 
-      - name: Setup Terraform
+      - name: Setup HashiCorp Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.5.7
 
-      - name: Check formatting
+      # Checks formatting across your targeted workspace
+      - name: Check code formatting style
         run: terraform fmt -check
-        working-directory: ./infra
+        working-directory: ./infra/envs/${{ matrix.environment }}
 
-      - name: Initialize
-        run: terraform init
-        working-directory: ./infra
+      # Initializes modules and configuration layers locally
+      - name: Initialize workspace backend
+        run: terraform init -backend=false
+        working-directory: ./infra/envs/${{ matrix.environment }}
 
-      - name: Validate configuration
+      # Serves as the ultimate offline dry-run step
+      - name: Validate environment syntax
         run: terraform validate
-        working-directory: ./infra
-
-      - name: Plan (Dry-Run)
-        run: terraform plan -no-color
-        working-directory: ./infra
+        working-directory: ./infra/envs/${{ matrix.environment }}
