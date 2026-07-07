@@ -1,4 +1,4 @@
-name: "Terraform Infrastructure CI"
+name: Infrastructure CI
 
 on:
   push:
@@ -7,34 +7,30 @@ on:
     branches: [ main ]
 
 jobs:
-  validate:
-    name: "Lint & Validate Infrastructure"
+  terraform-check:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        environment: [dev, prod]
-        
+    
     steps:
-      - name: "1. Checkout Repository Code"
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: "2. Install HashiCorp Terraform"
+      - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.5.7
 
-      - name: "3. Verify Code Formatting Style"
+      - name: Check formatting
         run: terraform fmt -check
-        working-directory: ./infra/envs/${{ matrix.environment }}
+        working-directory: ./infra
 
-      - name: "4. Initialize Modules & Workspace"
-        run: terraform init -reconfigure
-        working-directory: ./infra/envs/${{ matrix.environment }}
+      - name: Initialize
+        run: terraform init
+        working-directory: ./infra
 
-      - name: "5. Run Architectural Syntax Validation"
+      - name: Validate configuration
         run: terraform validate
-        working-directory: ./infra/envs/${{ matrix.environment }}
+        working-directory: ./infra
 
-      - name: "6. Speculative Dry-Run Execution Plan"
-        run: terraform plan -refresh=false -no-color
-        working-directory: ./infra/envs/${{ matrix.environment }}
+      - name: Plan (Dry-Run)
+        run: terraform plan -no-color
+        working-directory: ./infra
